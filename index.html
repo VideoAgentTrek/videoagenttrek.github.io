@@ -1,8 +1,918 @@
-<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>VideoAgentTrek</title>
-</head><body>
-<h1>VideoAgentTrek</h1>
-<p>Mining GUI-action trajectories from screen-recorded tutorials.</p>
-<p><a href="https://github.com/VideoAgentTrek" target="_blank">GitHub Org</a></p>
-</body></html>
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="description"
+      content="VideoAgentTrek: Computer Use Pretraining from Unlabeled Videos - A novel approach to training computer-use agents using unlabeled video data">
+    <meta name="keywords"
+      content="VideoAgentTrek, Computer-Use Agent, Video Pretraining, Unlabeled Videos, Vision-Language Model, Agent Learning, Self-Supervised Learning">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VideoAgentTrek: Computer Use Pretraining from Unlabeled Videos</title>
+
+    <script>
+    window.dataLayer = window.dataLayer || [];
+
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+
+    gtag('js', new Date());
+
+    gtag('config', 'G-PYVRSFMDRL');
+  </script>
+
+    <link
+      href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+      rel="stylesheet">
+
+    <link rel="stylesheet" href="./static/css/bulma.min.css">
+    <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-carousel@4.0.24/dist/css/bulma-carousel.min.css"> -->
+    <!-- <link rel="stylesheet" href="./static/css/bulma-carousel.css"> -->
+    <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+    <link rel="stylesheet" href="./static/css/index.css">
+    <link rel="icon" href="./static/images/videoagenttrek_logo.svg">
+    <style>
+      .trajectory-sidebar {
+        /* Adjust this value as needed, 560px is an estimate */
+        max-height: 420px; 
+        overflow-y: auto; /* Add scrollbar when content exceeds max-height */
+      }
+
+      .card-content.has-fixed-height {
+        overflow: hidden !important; /* Remove scrollbar */
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+      
+      .card-content.has-fixed-height::-webkit-scrollbar {
+        display: none; /* Chrome, Safari and Opera */
+      }
+      
+      .card .content {
+        overflow: hidden !important;
+      }
+
+      .step-action-details code {
+        display: inline-block; 
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 0.75em; /* 更小的基础字体尺寸 */
+        padding: 4px 8px; /* 为整个代码块添加内边距 */
+        margin-top: 5px;
+        margin-bottom: 10px;
+        background-color: transparent; /* 移除灰色背景 */
+        border-radius: 4px; /* 圆角 */
+        color: inherit;
+      }
+
+      .step-action-details .action-type {
+        display: inline-block;
+        background-color: #666666; /* 改为中灰色 */
+        color: #ffffff; /* 白色文本以提高在灰色背景上的可读性 */
+        padding: 3px 8px; /* 较小的内边距 */
+        border-radius: 12px; /* 适当减小圆角 */
+        font-weight: 500;
+        text-transform: uppercase;
+        margin-right: 6px; /* 减小右侧间距 */
+        font-size: 0.85em; /* 略微减小字体 */
+        line-height: 1;
+        min-width: 60px; /* 添加最小宽度 */
+        text-align: center; /* 文本居中 */
+      }
+
+      .step-action-details .action-coords {
+        display: inline-block;
+        color: #606060; /* 稍深一点的灰色，在灰色背景上更清晰 */
+        font-size: 0.65em; /* 与action-type匹配 */
+        vertical-align: middle;
+      }
+
+      .step-list-item.active {
+        background-color: #e8e8e8; /* Highlight active step slightly more */
+      }
+
+      /* 鼠标指示器样式 */
+      .mouse-indicator {
+        position: absolute;
+        pointer-events: none;
+        z-index: 100;
+      }
+
+      .trajectory-main {
+        position: relative;
+      }
+
+      .click-indicator {
+        width: 30px;
+        height: 30px;
+        background-image: url('./static/images/pointinghand.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        position: absolute;
+        transform: none;
+      }
+
+      .drag-indicator {
+        width: 30px;
+        height: 30px;
+        background-image: url('./static/images/vector.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        position: absolute;
+        transform: none;
+      }
+      
+      .click-point {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        background-color: #ff5722;
+        border-radius: 50%;
+        z-index: 99;
+        transform: translate(-50%, -50%);
+      }
+      
+      .drag-line {
+        position: absolute;
+        height: 2px;
+        background-color: #F44336; /* Red line */
+        z-index: 98;
+        transform-origin: left center;
+      }
+      
+      .drag-line::after {
+        content: '';
+        position: absolute;
+        width: 8px;  /* Length of the V's arms */
+        height: 8px; /* Affects the angle and size */
+        box-sizing: border-box;
+        border-style: solid;
+        border-color: #F44336; /* Color of the V */
+        border-width: 0 2px 2px 0; /* Creates an L-shape (bottom and right borders) */
+                                   /* Stroke thickness is 2px */
+        top: 50%; /* Vertically center the base of the L-shape */
+        right: -4px; /* Position the L-shape so its corner (eventual V tip) is at the line's end */
+                     /* Needs adjustment: - (height_of_L_corner_element / 2 / sqrt(2) ) approx */
+        transform: translateY(-50%) rotate(-45deg); /* Rotate L to V, V points right */
+      }
+
+      /* Trajectory selector styles */
+      .trajectory-selector {
+        margin-bottom: 1.5rem;
+        display: flex;
+        justify-content: center;
+      }
+
+      .trajectory-selector .tabs {
+        width: 100%;
+        max-width: 600px;
+      }
+
+      .trajectory-selector .tabs ul {
+        border-bottom-color: #dbdbdb;
+        justify-content: center;
+      }
+
+      .trajectory-selector .tabs li.is-active a {
+        border-bottom-color: #9966cc;
+        color: #9966cc;
+      }
+
+      .trajectory-tab {
+        cursor: pointer;
+      }
+
+/* ===== 优化表格样式 - 蓝色主题 ===== */
+.comparison-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.9rem;
+  color: #2c3e50;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,96,255,0.08);  
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 20px 0;
+  border: 1px solid #ffffff;
+}
+
+/* 表头样式 - 浅蓝灰色 */
+/* .comparison-table thead th {
+  background: linear-gradient(135deg, #f0f4ff 0%, #f8f9fa 100%); 
+  color: #374151;
+  font-weight: 600;
+  padding: 14px 12px;
+  border: none;
+  border-bottom: 2px solid #d6e3ff; 
+  font-size: 0.85rem;
+  letter-spacing: 0.025em;
+} */
+.comparison-table thead th {
+  background: linear-gradient(135deg, #ededed 0%, #ededed  100%); 
+  color: #0f0f0f;
+  font-weight: 1000;
+  padding: 14px 12px;
+  border: none;
+  border-bottom: 2px solid #d6e3ff; 
+  font-size: 0.85rem;
+  letter-spacing: 0.025em;
+}
+
+.comparison-table thead th:first-child {
+  text-align: center;
+  padding-left: 20px;
+}
+
+/* 表格单元格 */
+.comparison-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.comparison-table td:first-child {
+  text-align: left;
+  padding-left: 30px;
+  font-weight: 800;
+  color: #616161;
+  font-size: 0.88rem;
+}
+
+/* 分组标题行 (Proprietary / Open-Source) */
+.comparison-table tbody tr td[colspan] {
+  background: #f8fafb;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #959595;
+  padding: 8px 20px;
+  border-bottom: 1px solid #d6e3ff;
+}
+
+/* 行悬停效果 */
+.comparison-table tbody tr:not(:has(td[colspan])):hover {
+  background: #e0e0e0;  /* 很浅的蓝色 */
+}
+
+/* 我们的模型高亮 - 蓝色主题 */
+.comparison-table .our-model {
+  font-weight: 900 !important;
+  color: #0046D5;  /* DeepBlue */
+  position: relative;
+  padding-left: 26px;
+  background: linear-gradient(90deg, #ffffff 0%, #f9f9f9 100%);  /* 浅蓝色背景 */
+}
+
+/* .comparison-table .our-model::before {
+  content: '★';  
+  position: absolute;
+  left: 100px;
+  color: #ffb742; 
+  font-size: 1em;
+} */
+
+/* 最佳分数加粗 */
+.comparison-table tbody td b {
+  color: #080808;  /* DeepBlue */
+  font-weight: 700;
+}
+
+/* 下划线样式（用于最佳proprietary分数） */
+.comparison-table td u {
+  text-decoration: underline;
+  text-decoration-color: #98CAFF;  /* Blue20 */
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* ===== 上下标垂直排列样式 ===== */
+.metric-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.metric-value {
+  font-weight: 600;
+  font-size: 1em;
+  line-height: 1;
+  color: #1f2937;
+}
+
+.metric-errors {
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 0.68rem;
+  line-height: 1;
+  margin-left: 3px;
+  gap: 1px;
+  position: relative;
+  top: -2px;
+}
+
+.metric-errors sup {
+  color: #48bb78;
+  font-size: 1em;
+  line-height: 0.9;  /* 更紧凑 */
+  display: block;
+}
+
+.metric-errors sub {
+  color: #f56565;
+  font-size: 1em;
+  line-height: 0.9;  /* 更紧凑 */
+  display: block;
+}
+
+/* 移除最后一行的边框 */
+.comparison-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* 特殊：蓝色高亮列 */
+.highlight-blue {
+  font-weight: 1200 !important;
+  background-color: #f0f6ff !important;  /* 很浅的蓝色 */
+}
+
+/* 淡入动画 */
+@keyframes fadeInRow {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.comparison-table tbody tr {
+  animation: fadeInRow 0.3s ease-out forwards;
+}
+
+/* 动画延迟 */
+.comparison-table tbody tr:nth-child(1) { animation-delay: 0.02s; }
+.comparison-table tbody tr:nth-child(2) { animation-delay: 0.04s; }
+.comparison-table tbody tr:nth-child(3) { animation-delay: 0.06s; }
+/* ... 继续 ... */
+      
+.comparison-table tbody tr:not(:has(td[colspan])):hover td{
+  background:#f8faff;                            /* 原来的浅蓝 */
+  box-shadow:0 2px 8px rgba(0,0,0,.15);          /* 软阴影 */
+  position:relative;                             /* 让阴影可见 */
+  z-index:1;                                     /* 阴影浮在上层 */
+  transition:box-shadow .2s ease;
+}
+
+.comparison-table th,
+.comparison-table td {
+  border-left: none !important;
+  border-right: none !important;
+}
+
+.comparison-table td.our-model{
+  color:#0036a2 !important;   /* 深蓝 */
+  font-weight: 1200 !important;
+}
+    </style>
+    <script
+      src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script defer src="./static/js/fontawesome.all.min.js"></script>
+    <script src="./static/js/bulma-carousel.min.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/bulma-carousel@4.0.24/dist/js/bulma-carousel.min.js"></script>
+    <script src="./static/js/bulma-carousel.js"></script> -->
+    <script src="./static/js/bulma-slider.min.js"></script>
+    <script src="./static/js/index.js"></script>
+  </head>
+  <body>
+
+    <nav class="navbar" role="navigation" aria-label="main navigation">
+      <div class="navbar-brand">
+        <a role="button" class="navbar-burger" aria-label="menu"
+          aria-expanded="false">
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </a>
+      </div>
+      <div class="navbar-menu">
+        <div class="navbar-start"
+          style="flex-grow: 1; justify-content: center;">
+          <a class="navbar-item" href="https://xlang.ai/">
+            <span class="icon">
+              <i class="fas fa-home"></i>
+            </span>
+          </a>
+
+          <div class="navbar-item has-dropdown is-hoverable">
+            <a class="navbar-link">
+              More Research
+            </a>
+            <div class="navbar-dropdown">
+              <a class="navbar-item" href="https://os-world.github.io/">
+                OSWorld
+              </a>
+              <a class="navbar-item" href="https://spider2-v.github.io/">
+                Spider2-V
+              </a>
+              <a class="navbar-item" href="https://aguvis-project.github.io/">
+                Aguvis
+              </a>
+              <a class="navbar-item" href="https://agenttrek.github.io/">
+                AgentTrek
+              </a>
+              <a class="navbar-item" href="https://spider2-sql.github.io/">
+                Spider 2.0
+              </a>
+              <a class="navbar-item" href="https://osworld-grounding.github.io/">
+                Jedi - OSWorld-G
+              </a>
+              <a class="navbar-item" href="https://opencua.xlang.ai/">
+                OpenCUA
+              </a>
+              <a class="navbar-item" href="https://arena.xlang.ai/">
+                Computer Use Agent Arena
+              </a>
+              
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-body">
+        <div class="container is-max-desktop">
+          <div class="columns is-centered">
+            <div class="column has-text-centered">
+              <h1 class="title is-1 publication-title">VideoAgentTrek: Computer Use Pretraining from Unlabeled Videos</h1>
+              <div class="is-size-5 publication-authors">
+                <span class="author-block">
+                  <a href="https://scholar.google.com/citations?user=Etp3Eb8AAAAJ&hl=en">Dunjie Lu*</a><sup>1,2</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="https://yihengxu.com/">Yiheng Xu*</a><sup>1,2</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="https://junliwang.tech/">Junli Wang*</a><sup>2</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="">Haoyuan Wu</a><sup>1</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="https://xinyuanwangcs.github.io/">Xinyuan Wang</a><sup>1</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="">Zekun Wang</a><sup>2</sup>,
+                </span>
+                <span class="line-break"></span>
+                <span class="author-block">
+                  <a href="https://yangjl2003.github.io/">Junlin Yang</a><sup>1</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="">Hongjin Su</a><sup>1</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="https://chenjix.github.io/">Jixuan Chen</a><sup>1</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="https://openreview.net/profile?id=~Junda_Chen2">Junda Chen</a><sup>1</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="">Yuchen Mao</a><sup>1</sup>,
+                </span>
+                <span class="line-break"></span>
+                <span class="author-block">
+                  <a href="">Jingren Zhou</a><sup>2</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="">Junyang Lin</a><sup>2</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="">Binyuan Hui</a><sup>2,†</sup>,
+                </span>
+                <span class="author-block">
+                  <a href="https://taoyds.github.io/">Tao Yu</a><sup>1,†</sup>
+                </span>
+                
+              </div>
+
+              <div class="is-size-5 publication-authors">
+                <span class="author-block"><sup>1</sup>The University of Hong Kong,</span>
+                <span class="author-block"><sup>2</sup>Qwen Team, Alibaba Group</span>
+              </div>
+
+              <div class="is-size-10 publication-authors">
+                <span class="author-block"><sup>*</sup>Equal contribution</span>
+                <span class="author-block"><sup>†</sup>Corresponding authors</span>
+              </div>
+
+              <div class="column has-text-centered">
+                <div class="publication-links">
+                  <!-- Paper Link -->
+                  <span class="link-block">
+                    <a href="https://arxiv.org/abs/2508.09123"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="ai ai-arxiv"></i>
+                      </span>
+                      <span>Paper</span>
+                    </a>
+                  </span>
+                  <!-- Model Link -->
+                  <span class="link-block">
+                    <a href="https://huggingface.co/collections/xlangai/opencua-open-foundations-for-computer-use-agents-6882014ebecdbbe46074a68d"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <img src="./static/images/huggingface.svg"
+                          alt="Hugging Face" width="20" height="20">
+                      </span>
+                      <span>Model</span>
+                    </a>
+                  </span>
+                  <!-- Code Link -->
+                  <span class="link-block">
+                    <a href="https://github.com/xlang-ai/OpenCUA"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fab fa-github"></i>
+                      </span>
+                      <span>Code</span>
+                    </a>
+                  </span>
+                  <!-- Demo Link -->
+                  <span class="link-block">
+                    <a href="https://huggingface.co/spaces/xlangai/OpenCUA-demo"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fas fa-gamepad"></i>
+                      </span>
+                      <span>Demo</span>
+                    </a>
+                  </span>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Main Figure -->
+        <div class="container is-max-desktop">
+          <div class="hero-body" style="padding-top: 1rem; padding-bottom: 0.5rem;">
+            <img src="./static/images/main_pic.png"
+              alt="Main figure" width="100%">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Abstract -->
+    <section class="section" style="padding-top: 0.5rem;">
+      <div class="container is-max-desktop">
+        <!-- Abstract. -->
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-four-fifths">
+            <h2 class="title is-3">Abstract</h2>
+            <div class="content has-text-justified">
+              <p>
+                <strong>VideoAgentTrek</strong> is a video-driven pretraining pipeline for computer-use agents that turns in-the-wild screen-recorded tutorials into structured action trajectories—no manual annotation required. It detects GUI events directly from pixels, reconstructs parameters like click coordinates and typed text, and then trains agents with a two-stage recipe (video pretraining → supervised finetuning) to generalize across real apps and OSes.
+              </p>
+              <p><strong>Key Features & Contributions</strong></p>
+              <ul>
+                <li>🎥 <strong>Web-scale mining from unlabeled videos:</strong> 39k YouTube tutorials → 1.52M interaction steps.</li>
+                <li>🧩 <strong>VIDEO2ACTION (inverse dynamics):</strong> recovers detailed agent trajectories from raw screen video.</li>
+                <li>🧠 <strong>Two-stage training:</strong> continued pretraining on mined trajectories, then SFT on curated data.</li>
+                <li>📈 <strong>Strong results online & offline:</strong> OSWorld-Verified 15.8%; AgentNetBench 69.3%.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <!--/ Abstract. -->
+      
+    </section>
+
+    <!-- VIDEO2ACTION Showcase -->
+    <section class="section" id="video2action-showcase">
+      <div class="container-fluid">
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-10">
+
+            <br></br>
+            <h3 class="title is-4">VIDEO2ACTION: From Raw Video to Agent Trajectory</h3>
+            <p>
+              See how VIDEO2ACTION recovers detailed agent trajectories from raw screen-recorded videos—no manual annotation required 🧩
+            </p>
+            <div class="trajectory-selector">
+              <div class="tabs">
+                <ul>
+                  <li class="view-tab is-active" data-view="video" style="cursor: pointer;">
+                    <a style="cursor: pointer;">📹 Raw Screen Video</a>
+                  </li>
+                  <li class="view-tab" data-view="trajectory" style="cursor: pointer;">
+                    <a style="cursor: pointer;">🎯 Extracted Trajectory</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Raw Video View -->
+            <div id="video-view" class="video-container" style="display: block;">
+              <div style="max-width: 1000px; margin: 0 auto; background: #000; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
+                <video controls style="width: 100%; display: block;">
+                  <source src="./static/videos/sample.mp4" type="video/mp4">
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+              <p style="margin-top: 1rem; color: #666; font-size: 0.9rem;">
+                Raw screen-recorded video from YouTube tutorial
+              </p>
+            </div>
+
+            <!-- Extracted Trajectory View -->
+            <div id="trajectory-view" class="trajectory-container" style="display: none;">
+              <div class="trajectory-sidebar">
+                <div class="user-query-section">
+                  <div class="query-marker">
+                    <span class="dot"></span>
+                    <span class="label">Task Instruction</span>
+                  </div>
+                  <div class="query-content">
+                    <p id="traj-instruction">Please help me install the autoDocstring extension in VS Code.</p>
+                  </div>
+                </div>
+
+                <ul class="step-list">
+                </ul>
+              </div>
+
+              <div class="trajectory-main">
+                <img id="traj-image"
+                  src="./static/trajs/4e60007a-f5be-4bfc-9723-c39affa0a6d3-WOS/step_1_20250511@060437.png"
+                  alt="Trajectory step 1">
+                <div id="mouse-indicator" class="mouse-indicator"></div>
+              </div>
+            </div>
+
+            <!-- Controls (only for trajectory view) -->
+            <div id="trajectory-controls" class="controls-container" style="display: none;">
+              <div class="step-controls">
+                <button class="control-btn" id="prev-step" disabled>
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="control-btn" id="play-steps">
+                  <i class="fas fa-play"></i>
+                </button>
+                <button class="control-btn" id="next-step">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="control-btn" id="replay-step">
+                  <i class="fas fa-redo"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Video Collection and Preprocessing -->
+    <section class="section">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-four-fifths">
+            <h2 class="title is-3">Video Collection and Preprocessing</h2>
+            <section class="hero teaser">
+              <div class="container is-max-desktop">
+                <div class="hero-body">
+                  <img src="./static/images/video_collection_pipeline.png" alt="Video Collection Pipeline" width="100%">
+                </div>
+              </div>
+            </section>
+            <div class="content has-text-justified">
+              <p>
+                We build a scalable, channel-centric pipeline that grows from a handful of seed keywords (e.g., "Excel tutorial", "How to use Windows") into a large, high-quality corpus. 
+                Guided by <em>channel coherence</em>—the tendency of a channel to maintain stable topics and quality—we first validate a few seed videos; if ≥80% pass, we promote the entire channel as a trusted source and expand via its related videos, tags, and metadata. 
+                This recall-oriented discovery yields 55,000 candidate videos (~10,000 hours) with minimal human oversight.
+              </p>
+              <p>
+                To turn candidates into training-ready material, we apply <b>ScreenFilter</b>, a lightweight cursor-centric preprocessor (YOLOv8x backbone) that keeps only segments with sustained GUI interaction. 
+                Specifically, we retain clips where ≥80% of frames contain a cursor for at least 6s, with a 2s merge gap for temporal smoothing. 
+                Applied to our pool, ScreenFilter preserves 7,377 hours of verified GUI interaction from ~10,000 raw hours.
+              </p>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+    </section>
+
+    <!-- VIDEO2ACTION: Inverse Dynamics Module -->
+    <section class="section">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-four-fifths">
+            <h2 class="title is-3">Video2Action: Inverse Dynamics Module</h2>
+            <section class="hero teaser">
+              <div class="container is-max-desktop">
+                <div class="hero-body">
+                  <img src="./static/images/video2action.png"
+                    alt="Video2Action Pipeline" width="100%">
+                </div>
+              </div>
+            </section>
+            <div class="content has-text-justified">
+              <p>
+                <strong>Video2Action</strong> recovers detailed agent trajectories from raw screen videos, without prompts or manual labels. 
+                It <strong>(i)</strong> performs dense GUI action event detection with tight temporal bounds, <strong>(ii)</strong> parameterizes each action from pixels (e.g., click (x,y), drag path, scroll Δ, typed text), and <strong>(iii)</strong> generates step-level thoughts that capture intent and expected state change. 
+                Trained with synchronized video–event logs and a grounded VLM, <strong>Video2Action</strong> converts in-the-wild tutorials into training-ready sequences {clip, action(type, params), thought}, forming the second core component of VideoAgentTrek.
+              </p>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+    </section>
+
+<!-- Computer Use Agent Pretraining -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Computer Use Agent Pretraining</h2>
+        <section class="hero teaser">
+            <div class="container is-max-desktop">
+              <div class="hero-body">
+              <img src="./static/images/cua_evaluation_results.png"
+                alt="CUA Evaluation Results" width="100%">
+              </div>
+  </div>
+</section>
+        <div class="content has-text-justified">
+          <p>
+            We train an end-to-end computer-use agent with a <strong>two-stage</strong> schedule over our video-mined trajectories and a clean SFT set. 
+            Stage 1 performs continued pretraining on <strong>26B</strong> tokens from VideoAgentTrek (39k videos → 1.52M ReAct steps), interleaving frames with stepwise text and masking loss to text only. 
+            Stage 2 consolidates policy with <strong>8B</strong> tokens of curated human demonstrations (chat-style SFT), while a focused GUI-grounding subset (~1B tokens) sharpens pointer–target alignment. 
+            This decoupled grounding→policy recipe lifts both offline and online performance: on OSWorld-Verified the base model (4.5%) improves to 9.3% with Stage 2 only and to <strong>14.13%</strong> (up to <strong>15.78%</strong> with test-time scaling) after Stage 1+2; on AgentNetBench, step accuracy rises from 38.5% (base) to 64.1% (Stage 2) and <strong>69.3%</strong> (Stage 1+2).
+          </p>
+                  </div>
+                  </div>
+                </div>
+      </div>
+    </section>
+
+
+<!-- AgentNet Dataset section removed -->
+      </div>
+      <button class="modal-close is-large" aria-label="close"></button>
+    </div>
+
+    <script>
+      // Initialize carousel
+      document.addEventListener('DOMContentLoaded', function() {
+        // // Initialize Bulma Carousel
+        // var carousel = bulmaCarousel.attach('#results-carousel', {
+        //   slidesToScroll: 1,
+        //   slidesToShow: 3,
+        //   infinite: true,
+        //   autoplay: true,
+        //   autoplaySpeed: 3000,
+        //   pauseOnHover: true,
+        //   breakpoints: [
+        //     { changePoint: 480, slidesToShow: 1 },
+        //     { changePoint: 768, slidesToShow: 2 },
+        //     { changePoint: 1024, slidesToShow: 2 },
+        //     { changePoint: 1216, slidesToShow: 3 }
+        //   ]
+        // });
+
+        // Handle image clicks for zoom
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        const modalClose = modal.querySelector('.modal-close');
+        const modalBackground = modal.querySelector('.modal-background');
+
+        // Get all carousel images
+        document.querySelectorAll('.carousel .card-image img').forEach(img => {
+          img.style.cursor = 'pointer';
+          img.addEventListener('click', function() {
+            modal.classList.add('is-active');
+            modalImg.src = this.src;
+          });
+        });
+
+        // Close modal when clicking close button or background
+        modalClose.addEventListener('click', () => {
+          modal.classList.remove('is-active');
+        });
+
+        modalBackground.addEventListener('click', () => {
+          modal.classList.remove('is-active');
+        });
+
+        // Close modal with escape key
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && modal.classList.contains('is-active')) {
+            modal.classList.remove('is-active');
+          }
+        });
+      });
+
+      // 添加到你的JavaScript文件中或放在页面底部的<script>标签内
+
+</script>
+
+    <!-- Acknowledgements -->
+    <section class="section">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-four-fifths">
+            <h2 class="title is-3">Acknowledgements</h2>
+            <div class="content has-text-justified">
+              <p>
+                We thank Fan Zhou, Tianbao Xie, and the anonymous reviewers for their insightful discussions and valuable feedback. 
+                We also sincerely appreciate Alibaba Qwen Team for their strong infrastructure support and helpful guidance. 
+                This paper’s authors received support from the ECS (27212023) provided by the RGC of HongKong.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BibTeX -->
+    <section class="section" id="BibTeX">
+      <div class="container is-max-desktop content">
+        <h2 class="title">BibTeX</h2>
+        <p>If you find this work useful, please consider citing our paper:</p>
+        <pre><code>@misc{lu2025videoagenttrek,
+      title={VideoAgentTrek: Computer Use Pretraining from Unlabeled Videos}, 
+      author={Dunjie Lu and Yiheng Xu and Junli Wang and Haoyuan Wu and Xinyuan Wang and Zekun Wang and Junlin Yang and Hongjin Su and Jixuan Chen and Junda Chen and Yuchen Mao and Jingren Zhou and Junyang Lin and Binyuan Hui and Tao Yu},
+      year={2025}
+}</code></pre>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="container">
+        <div class="columns is-centered">
+          <div class="column is-8">
+            <div class="content">
+              <p>
+                This website is licensed under a <a rel="license"
+                  href="http://creativecommons.org/licenses/by-sa/4.0/">Creative
+                  Commons Attribution-ShareAlike 4.0 International
+                  License</a>.
+              </p>
+              <p>
+                This means you are free to borrow the <a
+                  href="https://github.com/nerfies/nerfies.github.io">source
+                  code</a> of this website,
+                we just ask that you link back to this page in the footer.
+                Please remember to remove the analytics code included in the
+                header of the website which
+                you do not want on your website.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- <script>
+      bulmaCarousel.attach('#results-carousel', {
+        slidesToScroll: 1,
+        slidesToShow: 4,
+        infinite: true,
+        autoplay: true,
+        autoplaySpeed: 3000,
+        breakpoints: [
+          { changePoint: 480, slidesToShow: 1 },
+          { changePoint: 768, slidesToShow: 2 },
+          { changePoint: 1024, slidesToShow: 3 },
+          { changePoint: 1408, slidesToShow: 4 }
+        ]
+      });
+    </script> -->
+
+  </body>
+</html>
