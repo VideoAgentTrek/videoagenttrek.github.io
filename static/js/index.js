@@ -269,26 +269,38 @@ $(document).ready(function() {
             if (step.action==="undefined" || step.action==="" || step.action==="DONE" || actionDisplay === "DONE" || actionDisplay === "done" || actionDisplay === "Complete" || actionDisplay === "complete") {
                 actionDisplay = `<code><span class="action-type">COMPLETE</span></code>`;
             } else if (step.mouseAction) {
-                // Capitalize action type (e.g., "click" -> "CLICK")
-                let actionType = step.mouseAction.type.charAt(0).toUpperCase() + step.mouseAction.type.slice(1);
-                let coords = '';
+                // Capitalize action type (e.g., "click" -> "CLICK", "right-click" -> "RIGHT-CLICK")
+                let actionType = step.mouseAction.type.toUpperCase();
                 
-                if (step.mouseAction.x !== undefined && step.mouseAction.y !== undefined) {
-                    coords = `(${step.mouseAction.x}, ${step.mouseAction.y})`;
-                }
-                
-                if (step.mouseAction.type === "drag") {
-                    // 对于拖拽动作，使用startX和startY作为起点，endX和endY作为终点
-                    let startX = step.mouseAction.startX || step.mouseAction.x;
-                    let startY = step.mouseAction.startY || step.mouseAction.y;
+                // Special handling for scroll action (no coordinates)
+                if (step.mouseAction.type === "scroll") {
+                    actionDisplay = `<code><span class="action-type">${actionType}</span></code>`;
+                } else {
+                    let coords = '';
                     
-                    if (step.mouseAction.endX !== undefined && step.mouseAction.endY !== undefined) {
-                        coords = `(${startX}, ${startY}) → (${step.mouseAction.endX}, ${step.mouseAction.endY})`;
+                    // Helper to format coordinates (handle both relative 0-1 and absolute)
+                    function formatCoord(val) {
+                        if (val === undefined) return '';
+                        return val <= 1 ? val.toFixed(4) : Math.round(val);
                     }
+                    
+                    if (step.mouseAction.x !== undefined && step.mouseAction.y !== undefined) {
+                        coords = `(${formatCoord(step.mouseAction.x)}, ${formatCoord(step.mouseAction.y)})`;
+                    }
+                    
+                    if (step.mouseAction.type === "drag") {
+                        // 对于拖拽动作，使用startX和startY作为起点，endX和endY作为终点
+                        let startX = step.mouseAction.startX || step.mouseAction.x;
+                        let startY = step.mouseAction.startY || step.mouseAction.y;
+                        
+                        if (step.mouseAction.endX !== undefined && step.mouseAction.endY !== undefined) {
+                            coords = `(${formatCoord(startX)}, ${formatCoord(startY)}) → (${formatCoord(step.mouseAction.endX)}, ${formatCoord(step.mouseAction.endY)})`;
+                        }
+                    }
+                    
+                    // Create HTML with spans for styling
+                    actionDisplay = `<code><span class="action-type">${actionType}</span> <span class="action-coords">${coords}</span></code>`;
                 }
-                
-                // Create HTML with spans for styling
-                actionDisplay = `<code><span class="action-type">${actionType}</span> <span class="action-coords">${coords}</span></code>`;
             } else if (step.action.toLowerCase().includes('typewrite') || step.action.toLowerCase().includes('type ')) {
                 // Extract the text being typed from the action string
                 let match = step.action.match(/typewrite\(['"](.+?)['"]\)/i) || step.action.match(/type ['"](.+?)['"]/i);
@@ -486,12 +498,16 @@ $(document).ready(function() {
               const m = a.match(/press\(['"]([^'"]+)['"]\)/i);
               step.keyboardAction = { type: 'press', key: m ? m[1] : 'key' };
             } else {
-              const m = a.match(/pyautogui\.(click|moveTo|dragTo|drag)\(([^)]*)\)/i);
+              const m = a.match(/pyautogui\.(click|rightClick|doubleClick|moveTo|dragTo|drag)\(([^)]*)\)/i);
               if (m) {
                 const kind = m[1].toLowerCase();
                 const nums = m[2].split(',').map(t => parseFloat(t)).filter(n => !Number.isNaN(n));
                 if (kind === 'click' && nums.length >= 2) {
                   step.mouseAction = { type: 'click', x: nums[0], y: nums[1] };
+                } else if (kind === 'rightclick' && nums.length >= 2) {
+                  step.mouseAction = { type: 'right-click', x: nums[0], y: nums[1] };
+                } else if (kind === 'doubleclick' && nums.length >= 2) {
+                  step.mouseAction = { type: 'double-click', x: nums[0], y: nums[1] };
                 } else if ((kind === 'drag' || kind === 'dragto') && nums.length >= 4) {
                   step.mouseAction = { type: 'drag', startX: nums[0], startY: nums[1], endX: nums[2], endY: nums[3] };
                 }
@@ -618,8 +634,9 @@ $(document).ready(function() {
             prevIndicatorIconState.visible = false;
             return;
         }
-        const scaleX = imgWidth / 1920;
-        const scaleY = imgHeight / 1080;
+        
+        // No need for hardcoded 1920x1080 - we'll use relative coordinates (0-1 range)
+        // and multiply by actual image dimensions
 
         // --- 2. Check for keyboard action ---
         if (step.keyboardAction) {
@@ -677,6 +694,50 @@ $(document).ready(function() {
             return;
         }
 
+        // --- 2.5. Check for scroll action ---
+        if (step.mouseAction && step.mouseAction.type === "scroll") {
+            // Hide mouse indicator if it was visible
+            if (prevIndicatorIconState.visible) {
+                $indicator.animate({ opacity: 0 }, interStepTransitionTime / 2, function() { $(this).hide(); });
+                prevIndicatorIconState.visible = false;
+            } else {
+                $indicator.hide();
+            }
+            
+            // Configure scroll indicator
+            $keyboardIndicator.removeClass('type-indicator press-indicator').addClass('scroll-indicator');
+            $keyboardIndicator.html(`
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i class="fas fa-mouse" style="font-size: 20px;"></i>
+                    <span>Scrolling</span>
+                </div>
+            `);
+            
+            // Position the scroll indicator
+            const imagePos = $image.offset();
+            const imageCenter = {
+                left: imagePos.left + imgWidth / 2,
+                top: imagePos.top + imgHeight / 2
+            };
+            
+            // Position indicator after it has content so we can calculate its width
+            $keyboardIndicator.css({
+                opacity: 0,
+                display: 'block'
+            });
+            
+            // Calculate position after rendering (so we know its dimensions)
+            setTimeout(() => {
+                const indicatorWidth = $keyboardIndicator.outerWidth();
+                $keyboardIndicator.css({
+                    left: imageCenter.left - (indicatorWidth / 2),
+                    top: imageCenter.top + 100
+                }).animate({ opacity: 1 }, interStepTransitionTime);
+            }, 0);
+            
+            return;
+        }
+
         // --- 3. Current step has no action at all ---
         if (!step.mouseAction) {
             if (prevIndicatorIconState.visible) {
@@ -691,13 +752,30 @@ $(document).ready(function() {
         // --- 4. Current step HAS a mouse action ---
         const action = step.mouseAction;
         const newActionType = action.type;
-        const newIconClass = (newActionType === "click") ? 'click-indicator' : 'drag-indicator';
+        const isClickType = (newActionType === "click" || newActionType === "right-click" || newActionType === "double-click");
+        const newIconClass = isClickType ? 'click-indicator' : 'drag-indicator';
 
-        let iconStartTargetX = (newActionType === "click" ? action.x : action.startX) * scaleX;
-        let iconStartTargetY = (newActionType === "click" ? action.y : action.startY) * scaleY;
+        // Support both relative (0-1) and absolute coordinates
+        // If coordinates are <= 1, treat as relative; otherwise treat as absolute (legacy support)
+        function getAbsoluteCoord(coord, dimension) {
+            return coord <= 1 ? coord * dimension : coord;
+        }
 
-        let iconEndTargetX = (newActionType === "click" ? iconStartTargetX : action.endX * scaleX);
-        let iconEndTargetY = (newActionType === "click" ? iconStartTargetY : action.endY * scaleY);
+        let iconStartTargetX = getAbsoluteCoord(
+            isClickType ? action.x : action.startX,
+            imgWidth
+        );
+        let iconStartTargetY = getAbsoluteCoord(
+            isClickType ? action.y : action.startY,
+            imgHeight
+        );
+
+        let iconEndTargetX = isClickType 
+            ? iconStartTargetX 
+            : getAbsoluteCoord(action.endX, imgWidth);
+        let iconEndTargetY = isClickType 
+            ? iconStartTargetY 
+            : getAbsoluteCoord(action.endY, imgHeight);
 
         $indicator.removeClass('click-indicator drag-indicator').addClass(newIconClass);
 
@@ -727,7 +805,7 @@ $(document).ready(function() {
         function finishInterStepTransition() {
             prevIndicatorIconState.visible = true; 
 
-            if (newActionType === "click") {
+            if (isClickType) {
                 const $clickPoint = $('<div class="click-point"></div>').css({
                     left: iconStartTargetX + 'px',
                     top: iconStartTargetY + 'px',
